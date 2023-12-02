@@ -1,4 +1,5 @@
 package ru.geekbrains.core.lesson2;
+import java.util.InputMismatchException;
 
 import java.util.Random;
 import java.util.Scanner;
@@ -20,10 +21,10 @@ public class Program {
 
 
     public static void main(String[] args) {
-        while (true){
+        while (true) {
             initialize();
             printField();
-            while (true){
+            while (true) {
                 humanTurn();
                 printField();
                 if (checkGameState(DOT_HUMAN, "Вы победили!"))
@@ -81,16 +82,21 @@ public class Program {
     /**
      * Ход игрока (человека)
      */
-    static void humanTurn(){
+    static void humanTurn() {
         int x;
         int y;
 
         do {
-            System.out.print("Введите координаты хода X и Y (от 1 до 3)\nчерез пробел: ");
-            x = scanner.nextInt() - 1;
-            y = scanner.nextInt() - 1;
-        }
-        while (!isCellValid(x, y) || !isCellEmpty(x, y));
+            try {
+                System.out.print("Введите координаты хода X и Y (от 1 до " + fieldSizeX + ")\nчерез пробел: ");
+                x = scanner.nextInt() - 1;
+                y = scanner.nextInt() - 1;
+            } catch (InputMismatchException e) {
+                System.out.println("Ошибка ввода. Пожалуйста, введите числа.");
+                scanner.next(); // Очистка буфера сканнера
+                x = y = -1; // Помечаем некорректный ввод
+            }
+        } while (!isCellValid(x, y) || !isCellEmpty(x, y));
 
         field[y][x] = DOT_HUMAN;
     }
@@ -98,17 +104,37 @@ public class Program {
     /**
      * Ход игрока (компьютера)
      */
-    static void aiTurn(){
-        int x;
-        int y;
+    static void aiTurn() {
+        int x = -1;
+        int y = -1;
 
-        do {
-            x = random.nextInt(fieldSizeX);
-            y = random.nextInt(fieldSizeY);
+        // Проверяем каждую свободную ячейку
+        for (int row = 0; row < fieldSizeY; row++) {
+            for (int col = 0; col < fieldSizeX; col++) {
+                if (isCellEmpty(col, row)) {
+                    field[row][col] = DOT_HUMAN; // Подставляем фишку игрока
+                    if (checkWin(DOT_HUMAN)) {
+                        // Если это приводит к победе игрока, блокируем ход компьютера в эту ячейку
+                        x = col;
+                        y = row;
+                    }
+                    field[row][col] = DOT_EMPTY; // Возвращаем ячейке пустое значение после проверки
+                }
+            }
         }
-        while (!isCellEmpty(x, y));
 
-        field[y][x] = DOT_AI;
+        // Если есть выигрышный ход для компьютера, ставим туда фишку
+        if (x != -1 && y != -1) {
+            field[y][x] = DOT_AI;
+        } else {
+            // В противном случае, делаем случайный ход
+            do {
+                x = random.nextInt(fieldSizeX);
+                y = random.nextInt(fieldSizeY);
+            } while (!isCellEmpty(x, y));
+
+            field[y][x] = DOT_AI;
+        }
     }
 
     /**
@@ -157,35 +183,92 @@ public class Program {
     static boolean checkDraw(){
         for (int y = 0; y < fieldSizeY; y++){
             for (int x = 0; x < fieldSizeX; x++){
-               if (isCellEmpty(x, y))
-                   return false;
+                if (isCellEmpty(x, y))
+                    return false;
             }
         }
         return true;
     }
 
     /**
-     * Проверка победы игрока
-     * @param dot фишка игрока
-     * @return признак победы
+     * Проверяет, достиг ли игрок победы.
+     *
+     * @param dot Фишка игрока.
+     * @return {@code true}, если игрок выиграл, иначе {@code false}.
      */
-    static boolean checkWin(char dot){
-        // Проверка по трем горизонталям
-        if (field[0][0] == dot && field[0][1] == dot && field[0][2] == dot) return true;
-        if (field[1][0] == dot && field[1][1] == dot && field[1][2] == dot) return true;
-        if (field[2][0] == dot && field[2][1] == dot && field[2][2] == dot) return true;
+    static boolean checkWin(char dot) {
+        return checkHorizontalWin(dot) || checkVerticalWin(dot) || checkDiagonalWin(dot);
+    }
 
-        // Проверка по трем вертикалям
-        if (field[0][0] == dot && field[1][0] == dot && field[2][0] == dot) return true;
-        if (field[0][1] == dot && field[1][1] == dot && field[2][1] == dot) return true;
-        if (field[0][2] == dot && field[1][2] == dot && field[2][2] == dot) return true;
-
-        // Проверка по диагоналям
-        if (field[0][0] == dot && field[1][1] == dot && field[2][2] == dot) return true;
-        if (field[0][2] == dot && field[1][1] == dot && field[2][0] == dot) return true;
-
+    /**
+     * Проверяет победу по горизонталям.
+     *
+     * @param dot Фишка игрока.
+     * @return {@code true}, если есть победа по горизонталям, иначе {@code false}.
+     */
+    private static boolean checkHorizontalWin(char dot) {
+        for (int row = 0; row < fieldSizeY; row++) {
+            boolean win = true;
+            for (int col = 0; col < fieldSizeX; col++) {
+                if (field[row][col] != dot) {
+                    win = false;
+                    break;
+                }
+            }
+            if (win) return true;
+        }
         return false;
     }
+
+    /**
+     * Проверяет победу по вертикалям.
+     *
+     * @param dot Фишка игрока.
+     * @return {@code true}, если есть победа по вертикалям, иначе {@code false}.
+     */
+    private static boolean checkVerticalWin(char dot) {
+        for (int col = 0; col < fieldSizeX; col++) {
+            boolean win = true;
+            for (int row = 0; row < fieldSizeY; row++) {
+                if (field[row][col] != dot) {
+                    win = false;
+                    break;
+                }
+            }
+            if (win) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Проверяет победу по диагоналям.
+     *
+     * @param dot Фишка игрока.
+     * @return {@code true}, если есть победа по диагоналям, иначе {@code false}.
+     */
+
+    // Проверка главной диагонали
+    private static boolean checkDiagonalWin(char dot) {
+        boolean mainDiagonalWin = true;
+        for (int i = 0; i < Math.min(fieldSizeX, fieldSizeY); i++) {
+            if (field[i][i] != dot) {
+                mainDiagonalWin = false;
+                break;
+            }
+        }
+        if (mainDiagonalWin) return true;
+
+        boolean antiDiagonalWin = true;
+        for (int i = 0; i < Math.min(fieldSizeX, fieldSizeY); i++) {
+            if (field[i][fieldSizeX - 1 - i] != dot) {
+                antiDiagonalWin = false;
+                break;
+            }
+        }
+        return antiDiagonalWin;
+    }
+
+
 
     static boolean check1(int x, int y, char dot, int winCount){
         return false;
